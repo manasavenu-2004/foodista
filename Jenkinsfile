@@ -62,37 +62,40 @@ pipeline {
                 }
             }
         }
+        
+stage('Update Manifest Repo') {
+    steps {
+        dir('manifest-workspace') {
+            deleteDir()
 
-        stage('Update Manifest Repo') {
-            steps {
-                dir('manifest-workspace') {
-                    deleteDir()
+            git branch: "${MANIFEST_BRANCH}",
+                credentialsId: "${GIT_CREDENTIALS_ID}",
+                url: "${MANIFEST_REPO}"
 
-                    git branch: "${MANIFEST_BRANCH}",
-                        credentialsId: "${GIT_CREDENTIALS_ID}",
-                        url: "${MANIFEST_REPO}"
+            withCredentials([
+                usernamePassword(
+                    credentialsId: "${GIT_CREDENTIALS_ID}",
+                    usernameVariable: 'GH_USER',
+                    passwordVariable: 'GH_TOKEN'
+                )
+            ]) {
+                sh '''
+                    git config user.name "manasavenu-2004"
+                    git config user.email "manasavenu88914@gmail.com"
 
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: "${GIT_CREDENTIALS_ID}",
-                            usernameVariable: 'GH_USER',
-                            passwordVariable: 'GH_TOKEN'
-                        )
-                    ]) {
-                        sh """
-                            git config user.name "manasavenu-2004"
-                            git config user.email "manasavenu88914@gmail.com"
+                    sed -i '/name: foodista/{n;s|image:.*|image: manasavenu2004/foodista:'"$BUILD_NUMBER"'|}' manifests/deployment.yaml
 
-                            sed -i '/name: foodista/{n;s|image:.*|image: manasavenu2004/foodista:${BUILD_NUMBER}|}' manifests/deployment.yaml
+                    git add manifests/deployment.yaml
+                    git commit -m "Update Foodista image to $BUILD_NUMBER"
 
-                            git add manifests/deployment.yaml
-                            git commit -m "Update Foodista image to ${BUILD_NUMBER}"
-                            git push origin ${MANIFEST_BRANCH}
-                        """
-                    }
-                }
+                    git push https://"$GH_USER":"$GH_TOKEN"@github.com/manasavenu-2004/foodista.git HEAD:main
+                '''
             }
         }
+    }
+}
+
+        
     }
 
     post {
