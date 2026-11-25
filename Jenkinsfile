@@ -5,12 +5,9 @@ pipeline {
     environment {
         DOCKER_CREDENTIALS_ID = 'docker-cred'
         DOCKER_IMAGE          = 'manasavenu2004/foodista'
-
         SONAR_SERVER_NAME     = 'sonarqube-env'
         SONAR_SCANNER_TOOL    = 'sonar-scanner'
-
         GIT_CREDENTIALS_ID    = 'github-cred'
-
         MANIFEST_REPO         = 'https://github.com/manasavenu-2004/foodista.git'
         MANIFEST_BRANCH       = 'main'
     }
@@ -19,10 +16,7 @@ pipeline {
 
         stage('Checkout Source Code') {
             steps {
-                git branch: 'main',
-                    url: "${SOURCE_REPO}"
-
-                echo 'Foodista source code checkout completed'
+                echo 'passed'
             }
         }
 
@@ -36,8 +30,7 @@ pipeline {
                             ${scannerHome}/bin/sonar-scanner \
                             -Dsonar.projectKey=foodista-key \
                             -Dsonar.projectName=foodista-project \
-                            -Dsonar.sources=. \
-                            -Dsonar.exclusions=**/*.min.js,**/*.min.css
+                            -Dsonar.sources=.
                         """
                     }
                 }
@@ -54,10 +47,8 @@ pipeline {
                             passwordVariable: 'DOCKER_PASS'
                         )
                     ]) {
-
                         sh """
-                            echo "\$DOCKER_PASS" | docker login \
-                            -u "\$DOCKER_USER" --password-stdin
+                            echo "\$DOCKER_PASS" | docker login -u "\$DOCKER_USER" --password-stdin
 
                             docker build \
                             -t ${DOCKER_IMAGE}:${BUILD_NUMBER} \
@@ -66,8 +57,6 @@ pipeline {
 
                             docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
                             docker push ${DOCKER_IMAGE}:latest
-
-                            docker logout
                         """
                     }
                 }
@@ -77,6 +66,7 @@ pipeline {
         stage('Update Manifest Repo') {
             steps {
                 dir('manifest-workspace') {
+                    deleteDir()
 
                     git branch: "${MANIFEST_BRANCH}",
                         credentialsId: "${GIT_CREDENTIALS_ID}",
@@ -89,27 +79,15 @@ pipeline {
                             passwordVariable: 'GH_TOKEN'
                         )
                     ]) {
-
                         sh """
                             git config user.name "manasavenu-2004"
                             git config user.email "manasavenu88914@gmail.com"
 
-                            sed -i -E \
-                            's|(^[[:space:]]*image:[[:space:]]*).*|\\1${DOCKER_IMAGE}:${BUILD_NUMBER}|' \
-                            manifests/deployment.yaml
+                            sed -i '/name: foodista/{n;s|image:.*|image: manasavenu2004/foodista:${BUILD_NUMBER}|}' manifests/deployment.yaml
 
                             git add manifests/deployment.yaml
-
-                            if ! git diff --cached --quiet; then
-                                git commit -m "Update Foodista image to ${BUILD_NUMBER}"
-
-                                git remote set-url origin \
-                                https://\${GH_USER}:\${GH_TOKEN}@github.com/manasavenu-2004/foodista.git
-
-                                git push origin ${MANIFEST_BRANCH}
-                            else
-                                echo "No manifest changes to commit"
-                            fi
+                            git commit -m "Update Foodista image to ${BUILD_NUMBER}"
+                            git push origin ${MANIFEST_BRANCH}
                         """
                     }
                 }
@@ -119,12 +97,11 @@ pipeline {
 
     post {
         success {
-            echo 'Foodista pipeline executed successfully!'
-            echo 'Docker image pushed and manifest repository updated.'
+            echo 'Pipeline executed successfully! Foodista manifest updated.'
         }
 
         failure {
-            echo 'Pipeline failed. Please review the console logs.'
+            echo 'Pipeline failed. Please review the stage logs above.'
         }
     }
 }
